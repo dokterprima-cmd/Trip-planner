@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Planner & Bus Seating</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Modul Polyfill untuk Dukungan Drag & Drop di Layar Sentuh (Mobile/Tablet) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/default.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/scroll-behaviour.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            color: #334155;
+        }
+
+        h1, h2, h3, .brand-font {
+            font-family: 'Fredoka', sans-serif;
+        }
+
+        .bus-outline {
+            border: 8px solid #312e81; /* Deep Indigo */
+            border-radius: 80px 80px 40px 40px;
+            padding: 30px 20px 40px 20px;
+            background-color: #ffffff;
+            box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.25), inset 0 0 30px rgba(0,0,0,0.02);
+            position: relative;
+            margin: 0 auto;
+            max-width: 580px;
+        }
+
+        .bus-outline::before {
+            content: ''; position: absolute; top: -25px; left: 35px; right: 35px; height: 25px;
+            border: 8px solid #312e81; border-bottom: none; border-radius: 50% 50% 0 0;
+            z-index: -1; background: rgba(255,255,255,0.9);
+        }
+
+        .mirror-left, .mirror-right {
+            position: absolute; top: 80px; width: 22px; height: 55px;
+            border: 6px solid #312e81; border-radius: 16px; background-color: #e2e8f0;
+            box-shadow: 3px 3px 0 rgba(49, 46, 129, 0.2);
+        }
+        .mirror-left { left: -35px; transform: rotate(-12deg); }
+        .mirror-right { right: -35px; transform: rotate(12deg); }
+
+        .seat {
+            width: 85px; height: 60px;
+            border: 3px dashed #cbd5e1; border-radius: 16px 16px 8px 8px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 0.8rem; background-color: #f8fafc;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .admin-mode .seat { cursor: pointer; }
+        .admin-mode .seat:hover { border-color: #818cf8; background-color: #eef2ff; transform: translateY(-2px); }
+        
+        .seat.occupied {
+            background-color: #e0e7ff; /* Indigo 100 */
+            border: 3px solid #6366f1; /* Indigo 500 */
+            border-bottom: 6px solid #4f46e5; /* Indigo 600 */
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); transform: translateY(-3px);
+        }
+        
+        .seat.special-seat.occupied {
+            background-color: #fef08a; border: 3px solid #eab308; border-bottom: 6px solid #ca8a04;
+            box-shadow: 0 4px 10px rgba(234, 179, 8, 0.3);
+        }
+
+        .admin-mode .seat.drag-over {
+            background-color: #fce7f3 !important; border-style: solid !important; border-color: #ec4899 !important;
+            transform: scale(1.1); z-index: 10;
+        }
+
+        .seat-number {
+            position: absolute; top: 4px; left: 8px; font-size: 0.7rem; font-weight: 800;
+            color: #94a3b8; background: rgba(255,255,255,0.9); padding: 2px 6px; border-radius: 6px;
+        }
+
+        .seat.occupied .seat-number { color: #4f46e5; }
+        .seat.special-seat.occupied .seat-number { color: #ca8a04; }
+
+        .passenger-name-display {
+            width: 100%; text-align: center; font-weight: 800; color: #312e81; /* Deep Indigo */
+            padding: 0 6px; margin-top: 12px; font-size: 0.8rem; line-height: 1.1;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+            overflow: hidden; word-wrap: break-word; user-select: none; text-shadow: 1px 1px 0px rgba(255,255,255,0.6);
+        }
+        
+        .admin-mode .passenger-name-display { cursor: grab; }
+        .admin-mode .passenger-name-display:active { cursor: grabbing; }
+        .seat.special-seat .passenger-name-display { color: #854d0e; }
+
+        .special-seat { width: 100px; height: 50px; background-color: #fef9c3; border-color: #fde047; }
+        .panitia-seat { width: 120px; height: 50px; border-radius: 16px 16px 20px 20px; }
+
+        .aisle { width: 70px; display: flex; align-items: center; justify-content: center; }
+
+        .back-row {
+            display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;
+            margin-top: 15px; padding-top: 15px; border-top: 4px dashed #cbd5e1;
+        }
+        .back-row .seat { width: 100%; height: 60px; }
+
+        .passenger-item { cursor: grab; user-select: none; }
+        .passenger-item:active { cursor: grabbing; }
+        .passenger-item.dragging { opacity: 0.4; transform: scale(0.95); }
+
+        .timeline-item { position: relative; padding-left: 30px; margin-bottom: 24px; }
+        .timeline-item::before {
+            content: '✨'; position: absolute; left: -4px; top: 0px; font-size: 1.2rem;
+            z-index: 2; background: white; border-radius: 50%;
+        }
+        .timeline-item::after {
+            content: ''; position: absolute; left: 10px; top: 20px; bottom: -30px; width: 4px;
+            background-color: #c084fc; z-index: 1; border-radius: 2px;
+        }
+        .timeline-item:last-child::after { display: none; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c084fc; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a855f7; }
+        
+        .hide { display: none !important; }
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .btn-bubbly {
+            border-radius: 9999px; font-weight: 700; transition: all 0.2s;
+            box-shadow: 0 4px 0px rgba(0,0,0,0.1);
+        }
+        .btn-bubbly:active { transform: translateY(4px); box-shadow: 0 0px 0px rgba(0,0,0,0.1); }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 2px solid white;
+        }
+        
+        /* Efek Animasi Pencarian Kursi */
+        .highlight-seat {
+            animation: pulseHighlight 2.5s ease-out;
+        }
+        @keyframes pulseHighlight {
+            0% { box-shadow: 0 0 0 0 rgba(192, 132, 252, 0.8); transform: scale(1.15); border-color: #c084fc; z-index: 20; }
+            70% { box-shadow: 0 0 0 20px rgba(192, 132, 252, 0); transform: scale(1); border-color: #c084fc; z-index: 20; }
+            100% { box-shadow: 0 0 0 0 rgba(192, 132, 252, 0); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+<nav class="bg-gradient-to-r from-indigo-600 via-purple-500 to-fuchsia-500 shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-20 items-center">
+            <div class="flex items-center gap-3">
+                <span class="text-4xl filter drop-shadow-md">✈️</span>
+                <h1 class="text-2xl font-bold text-white tracking-wide brand-font drop-shadow-md">Trip Planner</h1>
+            </div>
+            <div>
+                <button id="btn-login-trigger" class="btn-bubbly bg-white text-purple-600 hover:bg-purple-50 px-5 py-2.5 flex items-center gap-2" onclick="openModal('login-modal')">
+                    <span>Admin Login</span> 🔑
+                </button>
+                <button id="btn-logout" class="hide btn-bubbly bg-fuchsia-600 text-white hover:bg-fuchsia-700 px-5 py-2.5 flex items-center gap-2" onclick="logoutAdmin()">
+                    <span>Keluar Admin</span> 🚪
+                </button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 relative">
+
+    <!-- Global Search Bar (Pencarian Penumpang) -->
+    <div class="max-w-2xl mx-auto mb-10 relative z-40">
+        <div class="relative flex items-center bg-white/90 backdrop-blur-sm rounded-full shadow-lg border-2 border-fuchsia-200 p-1.5 focus-within:border-fuchsia-400 transition-colors">
+            <span class="pl-4 text-2xl filter drop-shadow-sm">🔎</span>
+            <input type="text" id="global-search-input" placeholder="Cari nama penumpang atau lokasi kursi..." class="w-full px-4 py-2.5 rounded-full focus:outline-none text-indigo-900 font-bold bg-transparent text-lg placeholder-indigo-300">
+        </div>
+        <div id="search-results" class="absolute top-full left-0 right-0 bg-white shadow-2xl rounded-3xl mt-3 overflow-hidden hidden max-h-72 overflow-y-auto border-2 border-indigo-100 divide-y divide-slate-50">
+            <!-- Hasil Pencarian Muncul di Sini -->
+        </div>
+    </div>
+
+    <!-- ================= PUBLIC DASHBOARD ================= -->
+    <div id="public-dashboard" class="fade-in">
+        <div class="text-center mb-12">
+            <h2 id="pub-trip-title" class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-purple-600 drop-shadow-sm mb-3 brand-font">🌴 Nama Trip 🌴</h2>
+            <p id="pub-trip-date" class="text-xl text-fuchsia-600 font-bold bg-white inline-block px-6 py-2 rounded-full shadow-sm border-2 border-fuchsia-100">Tanggal Trip</p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-8 items-start">
+            <!-- Left Col: Info & Rundown -->
+            <div class="w-full lg:w-1/3 flex flex-col gap-8">
+                <!-- Trip Info Card -->
+                <div class="glass-card p-6 rounded-3xl shadow-xl border-purple-50 border-2">
+                    <h3 class="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2 border-b-2 border-indigo-100 pb-3 brand-font">
+                        📢 Informasi Perjalanan
+                    </h3>
+                    <p id="pub-trip-desc" class="text-slate-600 text-sm leading-relaxed whitespace-pre-line font-medium"></p>
+                </div>
+
+                <!-- Rundown Card -->
+                <div class="glass-card p-6 rounded-3xl shadow-xl border-purple-50 border-2">
+                    <h3 class="text-xl font-bold text-indigo-900 mb-6 flex items-center gap-2 border-b-2 border-indigo-100 pb-3 brand-font">
+                        🗺️ Rundown Acara
+                    </h3>
+                    <div id="pub-rundown-list" class="mt-2 pl-2">
+                        <!-- Rundown items generated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Col: Bus Layout Public -->
+            <div class="w-full lg:w-2/3 flex flex-col items-center">
+                <div class="glass-card p-6 rounded-3xl shadow-xl w-full flex flex-col items-center border-purple-50 border-2">
+                    <h3 class="text-2xl font-bold text-indigo-900 mb-4 flex items-center gap-2 w-full justify-center brand-font">
+                        🚌 Denah Tempat Duduk
+                    </h3>
+                    
+                    <!-- Bus Selector Tabs (Public) -->
+                    <div id="pub-bus-tabs" class="flex gap-3 mb-8 overflow-x-auto pb-2 w-full justify-center">
+                        <!-- Tabs generated by JS -->
+                    </div>
+
+                    <!-- Placeholder for the Bus -->
+                    <div id="public-bus-container" class="w-full relative min-h-[500px]"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ADMIN DASHBOARD ================= -->
+    <div id="admin-dashboard" class="hide fade-in">
+        <div class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-3xl shadow-md border-2 border-indigo-100">
+            <h2 class="text-2xl font-bold text-indigo-900 flex items-center gap-2 brand-font">
+                🛠️ Dashboard Admin
+            </h2>
+            
+            <!-- Admin Tabs -->
+            <div class="flex gap-2">
+                <button class="admin-tab-btn btn-bubbly active-tab px-5 py-2 text-sm text-white bg-indigo-600" data-target="tab-info" onclick="switchTab('tab-info')">Info Trip</button>
+                <button class="admin-tab-btn btn-bubbly px-5 py-2 text-sm text-slate-500 bg-slate-100 hover:bg-slate-200" data-target="tab-rundown" onclick="switchTab('tab-rundown')">Rundown</button>
+                <button class="admin-tab-btn btn-bubbly px-5 py-2 text-sm text-slate-500 bg-slate-100 hover:bg-slate-200" data-target="tab-bus" onclick="switchTab('tab-bus')">Atur Denah Bus</button>
+            </div>
+        </div>
+
+        <!-- TAB: Info Trip -->
+        <div id="tab-info" class="admin-tab-content glass-card p-8 rounded-3xl shadow-xl max-w-2xl mx-auto border-purple-50 border-2">
+            <h3 class="text-xl font-bold mb-6 border-b-2 border-slate-100 pb-3 brand-font text-indigo-900">📝 Ubah Informasi Utama</h3>
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Nama Perjalanan (Trip Title)</label>
+                    <input type="text" id="edit-trip-title" class="w-full border-2 border-indigo-200 rounded-2xl px-4 py-3 focus:border-indigo-500 focus:outline-none font-medium text-slate-700">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Tanggal</label>
+                    <input type="text" id="edit-trip-date" class="w-full border-2 border-indigo-200 rounded-2xl px-4 py-3 focus:border-indigo-500 focus:outline-none font-medium text-slate-700">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Deskripsi Tambahan</label>
+                    <textarea id="edit-trip-desc" rows="4" class="w-full border-2 border-indigo-200 rounded-2xl px-4 py-3 focus:border-indigo-500 focus:outline-none font-medium text-slate-700"></textarea>
+                </div>
+                <button onclick="saveTripInfo()" class="w-full btn-bubbly bg-indigo-600 text-white text-lg py-3 mt-4 hover:bg-indigo-700">💾 Simpan Perubahan</button>
+            </div>
+        </div>
+
+        <!-- TAB: Rundown -->
+        <div id="tab-rundown" class="admin-tab-content hide glass-card p-8 rounded-3xl shadow-xl max-w-4xl mx-auto border-purple-50 border-2">
+            <div class="flex flex-col md:flex-row gap-8">
+                <div class="w-full md:w-1/3">
+                    <h3 class="text-xl font-bold mb-4 border-b-2 border-slate-100 pb-3 brand-font text-indigo-900">➕ Tambah/Edit Agenda</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">Waktu</label>
+                            <input type="time" id="new-rundown-time" class="w-full border-2 border-indigo-200 rounded-2xl px-4 py-2 focus:border-indigo-500 outline-none font-medium text-slate-700">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">Aktivitas</label>
+                            <input type="text" id="new-rundown-act" placeholder="Makan siang..." class="w-full border-2 border-indigo-200 rounded-2xl px-4 py-2 focus:border-indigo-500 outline-none font-medium text-slate-700">
+                        </div>
+                        <button id="btn-submit-rundown" onclick="submitRundown()" class="w-full btn-bubbly bg-indigo-600 text-white py-3 hover:bg-indigo-700 transition-colors">Tambah ke Jadwal</button>
+                        <button id="btn-cancel-rundown" onclick="cancelEditRundown()" class="w-full btn-bubbly bg-slate-200 text-slate-700 py-2 mt-2 hover:bg-slate-300 transition-colors hide">Batal Edit</button>
+                    </div>
+                </div>
+                <div class="w-full md:w-2/3">
+                    <h3 class="text-xl font-bold mb-4 border-b-2 border-slate-100 pb-3 brand-font text-indigo-900">📋 Daftar Agenda</h3>
+                    <div class="bg-white/50 rounded-2xl p-4 min-h-[250px] border-2 border-dashed border-indigo-200" id="edit-rundown-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Bus Management (Drag & Drop) -->
+        <div id="tab-bus" class="admin-tab-content hide">
+            <!-- Multi-Bus Controls -->
+            <div class="bg-white p-4 rounded-3xl shadow-sm mb-6 border-2 border-indigo-100 flex flex-wrap items-center gap-4 justify-between">
+                <div id="admin-bus-tabs" class="flex gap-2 overflow-x-auto flex-grow">
+                    <!-- Bus tabs generated here -->
+                </div>
+                <button onclick="addNewBus()" class="btn-bubbly bg-amber-400 text-amber-900 px-5 py-2 text-sm flex items-center gap-2 hover:bg-amber-500 shrink-0">
+                    <span>Tambah Bus</span> 🚌➕
+                </button>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-8 items-start">
+                
+                <!-- Left Panel: Passenger Pool -->
+                <div class="w-full lg:w-1/3 flex flex-col z-10">
+                    <div class="glass-card p-6 rounded-3xl shadow-xl flex flex-col border-purple-50 border-2">
+                        <h2 class="text-lg font-bold mb-4 text-indigo-900 flex items-center justify-between border-b-2 border-indigo-100 pb-3 brand-font">
+                            <span>🧍 Belum Kebagian Kursi</span>
+                            <span class="text-xs font-bold bg-fuchsia-100 text-fuchsia-700 px-3 py-1.5 rounded-full"><span id="unassigned-count">0</span> Sisa</span>
+                        </h2>
+                        
+                        <!-- Input for adding passengers -->
+                        <div class="flex mb-4 shadow-sm rounded-full bg-white border-2 border-indigo-100 overflow-hidden">
+                            <input type="text" id="new-passenger-input" placeholder="Masukkan nama..." class="flex-grow px-4 py-2 text-sm focus:outline-none font-medium bg-transparent text-slate-700">
+                            <button id="add-passenger-btn" class="bg-indigo-600 text-white px-5 py-2 hover:bg-indigo-700 transition font-bold text-sm">Tambah</button>
+                        </div>
+
+                        <!-- Drop zone to remove passenger from seat -->
+                        <div id="list-drop-zone" class="flex-grow space-y-2 pr-2 pb-4 min-h-[250px]" ondrop="dropOnList(event)" ondragover="allowDrop(event)">
+                            <!-- Unassigned Passengers generated here -->
+                        </div>
+
+                        <div class="mt-4 pt-4 border-t-2 border-indigo-100">
+                            <p class="text-xs font-bold text-slate-500 mb-2">Paste banyak nama sekaligus (Pisah baris/enter):</p>
+                            <textarea id="bulk-passengers" class="w-full border-2 border-indigo-100 rounded-2xl p-3 text-sm h-20 focus:outline-none focus:border-purple-400 resize-none font-medium text-slate-700" placeholder="Budi&#10;Siti..."></textarea>
+                            <button id="bulk-add-btn" class="mt-2 w-full btn-bubbly bg-purple-500 text-white px-3 py-2.5 hover:bg-purple-600 text-sm font-bold">🪄 Input Massal</button>
+                        </div>
+                        
+                        <div class="mt-5 pt-4 border-t-2 border-indigo-100 flex justify-between items-center">
+                             <span class="text-sm font-bold text-slate-500">Kapasitas: 53 Kursi/Bus</span>
+                             <button onclick="confirmResetSeats()" class="btn-bubbly bg-rose-100 text-rose-600 hover:bg-rose-200 px-4 py-2 text-xs font-bold border-2 border-rose-200">Reset Kursi Bus Ini</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Sticky Bus Layout -->
+                <div class="w-full lg:w-2/3 flex flex-col items-center bg-transparent lg:sticky lg:top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pb-10">
+                    <div class="w-full max-w-[580px] flex justify-between items-center mb-4 px-2">
+                        <span id="current-bus-indicator" class="text-lg font-bold text-indigo-900 brand-font bg-white px-4 py-1 rounded-full shadow-sm border border-indigo-100">Bus Terpilih</span>
+                        <div class="flex gap-2 flex-wrap justify-end">
+                            <button onclick="confirmDeleteBus()" class="btn-bubbly bg-rose-500 text-white px-4 py-2 hover:bg-rose-600 shadow-sm text-sm" title="Hapus Bus Ini">🗑️ Hapus</button>
+                            <button class="btn-bubbly bg-blue-500 text-white px-4 py-2 hover:bg-blue-600 shadow-sm flex items-center gap-2 text-sm" onclick="exportToCSV()" title="Download ke Excel">
+                                📄 Manifest
+                            </button>
+                            <button id="export-btn" class="btn-bubbly bg-emerald-500 text-white px-4 py-2 hover:bg-emerald-600 shadow-sm flex items-center gap-2 text-sm" onclick="exportToImage()">
+                                📸 Export
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Placeholder for the Bus -->
+                    <div id="admin-bus-container" class="w-full pb-10 relative"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- THE SINGLE BUS DOM ELEMENT (Moved around by JS between Public/Admin) -->
+<div id="master-bus-layout" class="hide transition-all duration-300">
+    
+    <!-- Header khusus untuk Export Image (Sembunyi secara default) -->
+    <div id="export-header" class="text-center mb-8 hidden">
+        <h2 id="export-trip-name" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-purple-600 brand-font drop-shadow-sm mb-3">Nama Trip</h2>
+        <h3 id="export-bus-name" class="text-xl text-fuchsia-600 font-bold bg-white inline-block px-8 py-2.5 rounded-full shadow-sm border-2 border-fuchsia-100">Nama Bus</h3>
+    </div>
+
+    <div class="bus-outline shrink-0 relative" id="bus-visual-core">
+        <div class="mirror-left"></div>
+        <div class="mirror-right"></div>
+        <!-- Steering Wheel Graphic -->
+        <div class="absolute right-[45px] top-[15px] w-14 h-14 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none"></div>
+
+        <!-- Front Row (Crew) -->
+        <div class="flex justify-between items-end mb-10 px-2 gap-2">
+            <div class="seat special-seat" data-seat-id="Helper" ondrop="dropOnSeat(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondragenter="dragEnter(event)">
+                <span class="seat-number">Helper</span>
+            </div>
+            <div class="seat special-seat panitia-seat" data-seat-id="Panitia" ondrop="dropOnSeat(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondragenter="dragEnter(event)">
+                <span class="seat-number">Panitia</span>
+            </div>
+            <div class="seat special-seat" data-seat-id="Driver" ondrop="dropOnSeat(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondragenter="dragEnter(event)">
+                <span class="seat-number">Driver</span>
+            </div>
+        </div>
+
+        <div id="main-seats-container" class="flex flex-col gap-4"></div>
+        <div class="back-row" id="back-row-container"></div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Login Modal -->
+<div id="login-modal" class="fixed inset-0 bg-indigo-900/60 backdrop-blur-sm z-[100] flex items-center justify-center hide opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm transform scale-95 transition-transform duration-300 border-4 border-indigo-100">
+        <h3 class="text-2xl font-bold text-indigo-900 mb-2 flex items-center gap-2 brand-font">🔐 Area Panitia</h3>
+        <p class="text-sm text-slate-500 mb-6 font-medium">Masukkan kunci rahasia untuk mengatur trip.</p>
+        <div class="space-y-4 mb-6">
+            <input type="text" id="login-user" placeholder="Username" class="w-full border-2 border-indigo-100 rounded-2xl px-4 py-3 focus:border-indigo-400 outline-none font-bold text-slate-700">
+            <input type="password" id="login-pass" placeholder="Password" class="w-full border-2 border-indigo-100 rounded-2xl px-4 py-3 focus:border-indigo-400 outline-none font-bold text-slate-700">
+            <p id="login-error" class="text-rose-500 text-sm font-bold hidden">❌ Kredensial salah!</p>
+        </div>
+        <div class="flex justify-end gap-3">
+            <button onclick="closeModal('login-modal')" class="btn-bubbly px-5 py-2.5 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200">Batal</button>
+            <button onclick="attemptLogin()" class="btn-bubbly px-5 py-2.5 text-sm bg-indigo-600 text-white hover:bg-indigo-700">Masuk</button>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Dialog Modal -->
+<div id="dialog-modal" class="fixed inset-0 bg-indigo-900/60 backdrop-blur-sm z-[110] flex items-center justify-center hide opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm transform scale-95 transition-transform duration-300 text-center border-4 border-rose-100">
+        <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-rose-100 mb-4 text-3xl">⚠️</div>
+        <h3 id="dialog-title" class="text-xl font-bold text-slate-900 mb-2 brand-font">Konfirmasi</h3>
+        <p id="dialog-msg" class="text-sm text-slate-500 mb-6 font-medium">Apakah anda yakin?</p>
+        <div class="flex justify-center gap-3">
+            <button onclick="closeModal('dialog-modal')" class="btn-bubbly px-5 py-2.5 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200">Batal</button>
+            <button id="dialog-confirm-btn" class="btn-bubbly px-5 py-2.5 text-sm text-white bg-rose-500 hover:bg-rose-600">Ya, Lanjutkan</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // ==============================================================================
+    // ⚠️ KONFIGURASI FIREBASE ANDA DI SINI ⚠️
+    // 1. Buat project di Firebase Console (https://console.firebase.google.com)
+    // 2. Buat Web App dan aktifkan Firestore Database
+    // 3. Copy config Anda dan paste di bawah ini:
+    // ==============================================================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyAILDRVPAwKYfeZuNaZH8MJvklpH9owtv0",
+        authDomain: "trip-planner-952fc.firebaseapp.com",
+        projectId: "trip-planner-952fc",
+        storageBucket: "trip-planner-952fc.firebasestorage.app",
+        messagingSenderId: "285391362913",
+        appId: "1:285391362913:web:12c064a57a7f7e3cee0320",
+    };
+
+    // Pengecekan apakah user sudah mengubah konfigurasi default
+    const isFirebaseConfigured = firebaseConfig.apiKey !== "API_KEY_ANDA";
+
+    if (isFirebaseConfigured) {
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            
+            // Nama koleksi dan dokumen untuk menyimpan data trip
+            // Anda bisa mengubah 'trip_utama_01' untuk trip yang berbeda
+            const docRef = doc(db, 'trips', 'trip_utama_01');
+
+            // Mendengarkan perubahan data secara Real-time dari Cloud (Multiuser)
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const cloudData = docSnap.data();
+                    if(window.firebaseSyncUpdate) window.firebaseSyncUpdate(cloudData);
+                }
+            }, (err) => console.error("Firebase Sync Error", err));
+
+            // Mengirim data ke Cloud jika admin melakukan perubahan denah/rundown
+            window.triggerFirebaseSave = async (data) => {
+                try { 
+                    await setDoc(docRef, data); 
+                } catch(e) { 
+                    console.error("Firebase Save Error", e); 
+                }
+            };
+            console.log("🔥 Firebase terhubung! Sinkronisasi Real-time Aktif.");
+        } catch(e) { 
+            console.error("Firebase Init Error", e); 
+        }
+    } else {
+        console.warn("⚠️ Firebase belum dikonfigurasi. Aplikasi berjalan offline (Local Storage).");
+    }
+</script>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    let appState = {
+        isAdminMode: false,
+        trip: {
+            title: "Bali Holiday Vibes 2026",
+            date: "15 - 20 Agustus 2026",
+            desc: "Siapkan pakaian pantai dan sunblock! 🏖️\nKumpul pukul 05.00 WIB."
+        },
+        rundown: [
+            { id: 'r1', time: '05:00', act: 'Kumpul & Registrasi' },
+            { id: 'r2', time: '06:00', act: 'Berangkat Otw Bali 🚌' }
+        ],
+        passengers: [], // Array of { id, name }
+        buses: [
+            { id: 'bus-1', name: 'Bus 1' }
+        ],
+        activeBusId: 'bus-1', 
+        assignments: {
+            'bus-1': {} // { seatId: passengerId }
+        }
+    };
+
+    let isSyncing = false;
+
+    window.firebaseSyncUpdate = function(newState) {
+        appState.trip = newState.trip || appState.trip;
+        appState.rundown = newState.rundown || appState.rundown;
+        appState.passengers = newState.passengers || [];
+        appState.buses = newState.buses || [{ id: 'bus-1', name: 'Bus 1' }];
+        appState.assignments = newState.assignments || { 'bus-1': {} };
+        
+        if (!appState.buses.find(b => b.id === appState.activeBusId)) {
+            appState.activeBusId = appState.buses[0].id;
+        }
+        
+        isSyncing = true; renderApp(); isSyncing = false;
+    }
+
+    const savedState = localStorage.getItem('happyTripStateV2');
+    if (savedState) {
+        try {
+            const parsed = JSON.parse(savedState);
+            appState.trip = parsed.trip || appState.trip;
+            appState.rundown = parsed.rundown || appState.rundown;
+            appState.passengers = parsed.passengers || [];
+            
+            if (parsed.buses && parsed.assignments) {
+                appState.buses = parsed.buses;
+                appState.assignments = parsed.assignments;
+            } else if (parsed.assignments && !parsed.assignments['bus-1']) {
+                appState.assignments = { 'bus-1': parsed.assignments };
+                appState.buses = [{ id: 'bus-1', name: 'Bus Utama' }];
+            }
+            
+            if (!appState.buses.find(b => b.id === appState.activeBusId)) {
+                appState.activeBusId = appState.buses[0].id;
+            }
+        } catch(e) { console.error("Error loading state", e); }
+    }
+
+    function saveState() {
+        const { isAdminMode, ...dataToSave } = appState;
+        localStorage.setItem('happyTripStateV2', JSON.stringify(dataToSave));
+        if (window.triggerFirebaseSave && !isSyncing) window.triggerFirebaseSave(dataToSave);
+    }
+
+    function generateBusHTML() {
+        const main = document.getElementById('main-seats-container');
+        const back = document.getElementById('back-row-container');
+        main.innerHTML = ''; back.innerHTML = '';
+        let currentSeatNum = 1;
+        
+        for (let row = 0; row < 11; row++) {
+            const rowDiv = document.createElement('div'); rowDiv.className = 'flex justify-between items-center px-1';
+            
+            const leftPair = document.createElement('div'); leftPair.className = 'flex gap-3';
+            leftPair.appendChild(createSeatDOM(currentSeatNum++));
+            leftPair.appendChild(createSeatDOM(currentSeatNum++));
+            
+            const aisle = document.createElement('div'); aisle.className = 'aisle';
+            aisle.innerHTML = `<div class="h-full w-3 bg-slate-100 rounded-full mx-auto opacity-50 shadow-inner"></div>`;
+            
+            const rightPair = document.createElement('div'); rightPair.className = 'flex gap-3';
+            rightPair.appendChild(createSeatDOM(currentSeatNum++));
+            rightPair.appendChild(createSeatDOM(currentSeatNum++));
+            
+            rowDiv.appendChild(leftPair); rowDiv.appendChild(aisle); rowDiv.appendChild(rightPair);
+            main.appendChild(rowDiv);
+        }
+
+        for (let i = 0; i < 6; i++) back.appendChild(createSeatDOM(currentSeatNum++));
+    }
+
+    function createSeatDOM(seatId) {
+        const seat = document.createElement('div'); seat.className = 'seat'; seat.dataset.seatId = seatId;
+        seat.setAttribute('ondrop', 'dropOnSeat(event)'); seat.setAttribute('ondragover', 'allowDrop(event)');
+        seat.setAttribute('ondragleave', 'dragLeave(event)'); seat.setAttribute('ondragenter', 'dragEnter(event)');
+        const numSpan = document.createElement('span'); numSpan.className = 'seat-number'; numSpan.innerText = seatId;
+        seat.appendChild(numSpan); return seat;
+    }
+
+    function renderApp() {
+        document.getElementById('pub-trip-title').innerText = appState.trip.title;
+        document.getElementById('pub-trip-date').innerText = appState.trip.date;
+        document.getElementById('pub-trip-desc').innerText = appState.trip.desc;
+        
+        const pubRundown = document.getElementById('pub-rundown-list'); pubRundown.innerHTML = '';
+        const sortedRundown = [...appState.rundown].sort((a,b) => a.time.localeCompare(b.time));
+        if (sortedRundown.length === 0) pubRundown.innerHTML = '<p class="text-slate-400 text-sm italic">Jadwal masih kosong.</p>';
+        else {
+            sortedRundown.forEach(r => {
+                pubRundown.innerHTML += `
+                    <div class="timeline-item">
+                        <span class="text-sm font-extrabold text-fuchsia-600 block bg-fuchsia-50 inline-block px-2 rounded">${r.time}</span>
+                        <span class="text-base text-indigo-900 font-bold mt-1 block">${r.act}</span>
+                    </div>`;
+            });
+        }
+
+        const pubDash = document.getElementById('public-dashboard');
+        const admDash = document.getElementById('admin-dashboard');
+        const masterBus = document.getElementById('master-bus-layout');
+        const pubContainer = document.getElementById('public-bus-container');
+        const admContainer = document.getElementById('admin-bus-container');
+        const btnLogin = document.getElementById('btn-login-trigger');
+        const btnLogout = document.getElementById('btn-logout');
+
+        masterBus.classList.remove('hide');
+
+        if (appState.isAdminMode) {
+            pubDash.classList.add('hide'); admDash.classList.remove('hide');
+            admContainer.appendChild(masterBus); masterBus.classList.add('admin-mode');
+            btnLogin.classList.add('hide'); btnLogout.classList.remove('hide');
+            
+            const activeBusName = appState.buses.find(b => b.id === appState.activeBusId)?.name;
+            document.getElementById('current-bus-indicator').innerText = `Sedang Atur: ${activeBusName}`;
+            
+            renderAdminViews();
+        } else {
+            pubDash.classList.remove('hide'); admDash.classList.add('hide');
+            pubContainer.appendChild(masterBus); masterBus.classList.remove('admin-mode');
+            btnLogin.classList.remove('hide'); btnLogout.classList.add('hide');
+            renderPublicBusTabs();
+        }
+
+        renderSeats(); saveState();
+    }
+    
+    function renderPublicBusTabs() {
+        const container = document.getElementById('pub-bus-tabs');
+        container.innerHTML = '';
+        appState.buses.forEach(bus => {
+            const isActive = bus.id === appState.activeBusId;
+            const btn = document.createElement('button');
+            btn.className = `btn-bubbly px-6 py-2.5 font-bold transition-colors whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-indigo-600 border-2 border-indigo-100 hover:bg-indigo-50'}`;
+            btn.innerText = `🚌 ${bus.name}`;
+            btn.onclick = () => { appState.activeBusId = bus.id; renderApp(); };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderAdminBusTabs() {
+        const container = document.getElementById('admin-bus-tabs');
+        container.innerHTML = '';
+        appState.buses.forEach(bus => {
+            const isActive = bus.id === appState.activeBusId;
+            const btn = document.createElement('button');
+            btn.className = `btn-bubbly px-5 py-2 text-sm font-bold transition-colors whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border-2 border-indigo-100'}`;
+            btn.innerText = `🚌 ${bus.name}`;
+            btn.onclick = () => { appState.activeBusId = bus.id; renderApp(); };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderAdminViews() {
+        document.getElementById('edit-trip-title').value = appState.trip.title;
+        document.getElementById('edit-trip-date').value = appState.trip.date;
+        document.getElementById('edit-trip-desc').value = appState.trip.desc;
+
+        const editRundown = document.getElementById('edit-rundown-list'); editRundown.innerHTML = '';
+        const sortedRundown = [...appState.rundown].sort((a,b) => a.time.localeCompare(b.time));
+        sortedRundown.forEach(r => {
+            editRundown.innerHTML += `
+                <div class="flex justify-between items-center bg-white p-3 rounded-2xl border-2 border-indigo-50 mb-3 shadow-sm">
+                    <div>
+                        <span class="font-extrabold text-fuchsia-600 mr-2 bg-fuchsia-50 px-2 rounded">${r.time}</span>
+                        <span class="text-indigo-900 text-sm font-bold">${r.act}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startEditRundown('${r.id}')" class="text-slate-400 hover:text-indigo-600 p-2 bg-slate-50 hover:bg-indigo-50 rounded-full transition" title="Edit">✏️</button>
+                        <button onclick="deleteRundown('${r.id}')" class="text-slate-400 hover:text-rose-500 p-2 bg-slate-50 hover:bg-rose-50 rounded-full transition" title="Hapus">❌</button>
+                    </div>
+                </div>`;
+        });
+
+        renderAdminBusTabs();
+
+        const listDropZone = document.getElementById('list-drop-zone');
+        listDropZone.innerHTML = '';
+        
+        let allAssignedIds = [];
+        for (let busId in appState.assignments) {
+            allAssignedIds.push(...Object.values(appState.assignments[busId]));
+        }
+        const unassigned = appState.passengers.filter(p => !allAssignedIds.includes(p.id));
+
+        document.getElementById('unassigned-count').innerText = unassigned.length;
+
+        unassigned.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'passenger-item bg-white border-2 border-indigo-50 p-3 rounded-2xl flex justify-between items-center hover:border-indigo-300 transition shadow-sm group';
+            div.draggable = true; div.dataset.passengerId = p.id;
+            div.addEventListener('dragstart', (e) => dragStart(e, null)); div.addEventListener('dragend', dragEnd);
+            div.innerHTML = `
+                <div class="flex items-center flex-grow overflow-hidden pr-2">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white flex items-center justify-center font-bold mr-3 shadow-inner text-sm">
+                        ${p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span class="font-bold text-indigo-900 truncate text-sm">${p.name}</span>
+                </div>
+                <button onclick="deletePassenger('${p.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0" title="Hapus">❌</button>
+            `;
+            listDropZone.appendChild(div);
+        });
+
+        if(unassigned.length === 0) {
+            listDropZone.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-indigo-300 p-6 text-center">
+                    <span class="text-4xl mb-2">🎉</span>
+                    <p class="text-sm font-bold">Semua sudah dapat kursi!</p>
+                </div>`;
+        }
+    }
+
+    function renderSeats() {
+        const activeBusAssignments = appState.assignments[appState.activeBusId] || {};
+        
+        document.querySelectorAll('.seat').forEach(seat => {
+            const seatId = seat.dataset.seatId;
+            const passengerId = activeBusAssignments[seatId];
+
+            seat.classList.remove('occupied');
+            const existingNameDisplay = seat.querySelector('.passenger-name-display');
+            if (existingNameDisplay) existingNameDisplay.remove();
+
+            if (passengerId) {
+                const passenger = appState.passengers.find(p => p.id === passengerId);
+                if (passenger) {
+                    seat.classList.add('occupied');
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'passenger-name-display passenger-item';
+                    nameDiv.innerText = passenger.name; nameDiv.title = passenger.name;
+                    
+                    if(appState.isAdminMode) {
+                        nameDiv.draggable = true; nameDiv.dataset.passengerId = passenger.id; nameDiv.dataset.sourceSeat = seatId; 
+                        nameDiv.addEventListener('dragstart', (e) => dragStart(e, seatId)); nameDiv.addEventListener('dragend', dragEnd);
+                    }
+                    seat.appendChild(nameDiv);
+                } else {
+                    delete appState.assignments[appState.activeBusId][seatId];
+                }
+            }
+        });
+    }
+
+    function dragStart(e, sourceSeatId) {
+        if(!appState.isAdminMode) return;
+        const dragData = { passengerId: e.target.dataset.passengerId, sourceSeat: sourceSeatId };
+        e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => {
+            e.target.classList.add('dragging');
+            if(sourceSeatId) e.target.closest('.seat').classList.add('opacity-40');
+        }, 0);
+    }
+
+    function dragEnd(e) {
+        e.target.classList.remove('dragging');
+        document.querySelectorAll('.seat').forEach(s => s.classList.remove('drag-over', 'opacity-40'));
+        document.getElementById('list-drop-zone').classList.remove('bg-indigo-50', 'border-indigo-300', 'border-dashed');
+    }
+
+    function allowDrop(e) { if(!appState.isAdminMode) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function dragEnter(e) {
+        if(!appState.isAdminMode) return; e.preventDefault();
+        const seat = e.target.closest('.seat');
+        if(seat) seat.classList.add('drag-over');
+        else if (e.target.closest('#list-drop-zone')) document.getElementById('list-drop-zone').classList.add('bg-indigo-50', 'border-indigo-300', 'border-dashed', 'border-4');
+    }
+    function dragLeave(e) {
+        if(!appState.isAdminMode) return;
+        const seat = e.target.closest('.seat');
+        if(seat) seat.classList.remove('drag-over');
+        else if (e.target.closest('#list-drop-zone')) document.getElementById('list-drop-zone').classList.remove('bg-indigo-50', 'border-indigo-300', 'border-dashed', 'border-4');
+    }
+
+    function dropOnSeat(e) {
+        if(!appState.isAdminMode) return; e.preventDefault();
+        const targetSeat = e.target.closest('.seat'); if (!targetSeat) return;
+        targetSeat.classList.remove('drag-over');
+        
+        try {
+            const dragDataStr = e.dataTransfer.getData('application/json'); if (!dragDataStr) return;
+            const { passengerId, sourceSeat } = JSON.parse(dragDataStr);
+            const targetSeatId = targetSeat.dataset.seatId;
+            const currentBusAssignments = appState.assignments[appState.activeBusId];
+
+            if (!appState.passengers.find(p => p.id === passengerId)) return;
+
+            if (sourceSeat) {
+                if (sourceSeat !== targetSeatId) {
+                    const occupantInTarget = currentBusAssignments[targetSeatId];
+                    if (occupantInTarget) {
+                        currentBusAssignments[sourceSeat] = occupantInTarget;
+                        currentBusAssignments[targetSeatId] = passengerId;
+                    } else {
+                        delete currentBusAssignments[sourceSeat];
+                        currentBusAssignments[targetSeatId] = passengerId;
+                    }
+                }
+            } else {
+                currentBusAssignments[targetSeatId] = passengerId;
+            }
+            renderApp();
+        } catch(err) { console.error(err); }
+    }
+
+    function dropOnList(e) {
+        if(!appState.isAdminMode) return; e.preventDefault();
+        document.getElementById('list-drop-zone').classList.remove('bg-indigo-50', 'border-indigo-300', 'border-dashed', 'border-4');
+        try {
+            const dragDataStr = e.dataTransfer.getData('application/json'); if (!dragDataStr) return;
+            const dragData = JSON.parse(dragDataStr);
+            if (dragData.sourceSeat) {
+                delete appState.assignments[appState.activeBusId][dragData.sourceSeat];
+                renderApp();
+            }
+        } catch(err) {}
+    }
+
+    function generateId() { return 'id-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+    function switchTab(tabId) {
+        document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hide'));
+        document.querySelectorAll('.admin-tab-btn').forEach(el => { el.classList.remove('bg-indigo-600', 'text-white'); el.classList.add('bg-slate-100', 'text-slate-500'); });
+        document.getElementById(tabId).classList.remove('hide');
+        const activeBtn = document.querySelector(`.admin-tab-btn[data-target="${tabId}"]`);
+        activeBtn.classList.remove('bg-slate-100', 'text-slate-500'); activeBtn.classList.add('bg-indigo-600', 'text-white');
+    }
+
+    function saveTripInfo() {
+        appState.trip.title = document.getElementById('edit-trip-title').value;
+        appState.trip.date = document.getElementById('edit-trip-date').value;
+        appState.trip.desc = document.getElementById('edit-trip-desc').value;
+        renderApp();
+    }
+
+    let editingRundownId = null;
+
+    function startEditRundown(id) {
+        const r = appState.rundown.find(x => x.id === id);
+        if(r) {
+            document.getElementById('new-rundown-time').value = r.time;
+            document.getElementById('new-rundown-act').value = r.act;
+            editingRundownId = id;
+            
+            const btnSubmit = document.getElementById('btn-submit-rundown');
+            btnSubmit.innerText = '💾 Simpan Perubahan';
+            btnSubmit.classList.replace('bg-indigo-600', 'bg-emerald-500');
+            btnSubmit.classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-600');
+            
+            document.getElementById('btn-cancel-rundown').classList.remove('hide');
+        }
+    }
+
+    function cancelEditRundown() {
+        editingRundownId = null;
+        document.getElementById('new-rundown-time').value = '';
+        document.getElementById('new-rundown-act').value = '';
+        
+        const btnSubmit = document.getElementById('btn-submit-rundown');
+        btnSubmit.innerText = 'Tambah ke Jadwal';
+        btnSubmit.classList.replace('bg-emerald-500', 'bg-indigo-600');
+        btnSubmit.classList.replace('hover:bg-emerald-600', 'hover:bg-indigo-700');
+        
+        document.getElementById('btn-cancel-rundown').classList.add('hide');
+    }
+
+    function submitRundown() {
+        const time = document.getElementById('new-rundown-time').value;
+        const act = document.getElementById('new-rundown-act').value;
+        if(time && act) { 
+            if (editingRundownId) {
+                const idx = appState.rundown.findIndex(x => x.id === editingRundownId);
+                if(idx !== -1) {
+                    appState.rundown[idx].time = time;
+                    appState.rundown[idx].act = act;
+                }
+            } else {
+                appState.rundown.push({ id: generateId(), time, act }); 
+            }
+            cancelEditRundown();
+            renderApp(); 
+        }
+    }
+    
+    function deleteRundown(id) { appState.rundown = appState.rundown.filter(r => r.id !== id); renderApp(); }
+    function addPassenger(name) { if (name.trim()) { appState.passengers.push({ id: generateId(), name: name.trim() }); renderApp(); } }
+
+    function deletePassenger(id) {
+        openDialog("Hapus Penumpang?", "Mereka akan dihapus permanen dari daftar.", () => {
+            appState.passengers = appState.passengers.filter(p => p.id !== id);
+            for(let busId in appState.assignments) {
+                for (let seatId in appState.assignments[busId]) {
+                    if (appState.assignments[busId][seatId] === id) delete appState.assignments[busId][seatId];
+                }
+            }
+            renderApp();
+        });
+    }
+
+    function addNewBus() {
+        const num = appState.buses.length + 1;
+        const newBusId = generateId();
+        appState.buses.push({ id: newBusId, name: `Bus ${num}` });
+        appState.assignments[newBusId] = {};
+        appState.activeBusId = newBusId;
+        renderApp();
+    }
+
+    function confirmDeleteBus() {
+        if (appState.buses.length <= 1) { alert("Tidak bisa menghapus satu-satunya bus yang ada."); return; }
+        openDialog("Hapus Bus Ini?", "Semua penempatan kursi di bus ini akan hilang, namun penumpang kembali ke daftar.", () => {
+            appState.buses = appState.buses.filter(b => b.id !== appState.activeBusId);
+            delete appState.assignments[appState.activeBusId];
+            appState.activeBusId = appState.buses[0].id;
+            renderApp();
+        });
+    }
+
+    function confirmResetSeats() {
+        openDialog("Kosongkan Bus Ini?", "Semua kursi di bus yang sedang dilihat akan dikosongkan.", () => {
+            appState.assignments[appState.activeBusId] = {}; renderApp();
+        });
+    }
+
+    document.getElementById('add-passenger-btn').addEventListener('click', () => { addPassenger(document.getElementById('new-passenger-input').value); document.getElementById('new-passenger-input').value = ''; });
+    document.getElementById('new-passenger-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') { addPassenger(e.target.value); e.target.value = ''; } });
+    document.getElementById('bulk-add-btn').addEventListener('click', () => {
+        const names = document.getElementById('bulk-passengers').value.split('\n'); let added = 0;
+        names.forEach(name => { if (name.trim()) { appState.passengers.push({ id: generateId(), name: name.trim() }); added++; } });
+        if (added > 0) { document.getElementById('bulk-passengers').value = ''; renderApp(); }
+    });
+
+    function openModal(id) {
+        const el = document.getElementById(id); el.classList.remove('hide');
+        setTimeout(() => { el.classList.remove('opacity-0'); el.firstElementChild.classList.remove('scale-95'); }, 10);
+    }
+    function closeModal(id) {
+        const el = document.getElementById(id); el.classList.add('opacity-0'); el.firstElementChild.classList.add('scale-95');
+        setTimeout(() => { el.classList.add('hide'); }, 300);
+    }
+
+    function attemptLogin() {
+        if (document.getElementById('login-user').value === 'admin' && document.getElementById('login-pass').value === 'admin123') {
+            document.getElementById('login-error').classList.add('hidden'); appState.isAdminMode = true;
+            document.getElementById('login-user').value = ''; document.getElementById('login-pass').value = '';
+            closeModal('login-modal'); renderApp();
+        } else document.getElementById('login-error').classList.remove('hidden');
+    }
+    function logoutAdmin() { appState.isAdminMode = false; renderApp(); }
+
+    let dialogCallback = null;
+    function openDialog(title, msg, onConfirm) {
+        document.getElementById('dialog-title').innerText = title; document.getElementById('dialog-msg').innerText = msg;
+        dialogCallback = onConfirm; openModal('dialog-modal');
+    }
+    document.getElementById('dialog-confirm-btn').addEventListener('click', () => { if(dialogCallback) dialogCallback(); closeModal('dialog-modal'); });
+
+    function exportToImage() {
+        const exportContainer = document.getElementById('master-bus-layout');
+        const exportHeader = document.getElementById('export-header');
+        const exportBtn = document.getElementById('export-btn');
+        
+        const activeBusName = appState.buses.find(b => b.id === appState.activeBusId)?.name || 'Bus';
+        const tripName = appState.trip.title;
+        
+        document.getElementById('export-trip-name').innerText = tripName;
+        document.getElementById('export-bus-name').innerText = activeBusName;
+
+        const originalText = exportBtn.innerHTML; 
+        exportBtn.innerHTML = '⏳ Memproses...'; 
+        exportBtn.disabled = true;
+
+        exportHeader.classList.remove('hidden');
+        exportContainer.style.background = '#f8fafc';
+        exportContainer.style.backgroundImage = 'radial-gradient(#cbd5e1 1.5px, transparent 1.5px)';
+        exportContainer.style.backgroundSize = '24px 24px';
+        exportContainer.classList.add('p-12', 'rounded-[40px]', 'shadow-2xl');
+
+        setTimeout(() => {
+            html2canvas(exportContainer, { scale: 2, backgroundColor: '#f8fafc' }).then(canvas => {
+                const link = document.createElement('a'); 
+                link.download = `Denah-${activeBusName}-${tripName}.png`;
+                link.href = canvas.toDataURL('image/png'); 
+                link.click();
+                
+                exportHeader.classList.add('hidden');
+                exportContainer.style.background = '';
+                exportContainer.style.backgroundImage = '';
+                exportContainer.style.backgroundSize = '';
+                exportContainer.classList.remove('p-12', 'rounded-[40px]', 'shadow-2xl');
+                
+                exportBtn.innerHTML = originalText; 
+                exportBtn.disabled = false;
+            }).catch(err => { 
+                exportHeader.classList.add('hidden');
+                exportContainer.style.background = '';
+                exportContainer.classList.remove('p-12', 'rounded-[40px]', 'shadow-2xl');
+                exportBtn.innerHTML = originalText; 
+                exportBtn.disabled = false; 
+            });
+        }, 300);
+    }
+
+    // --- FITUR BARU: EXPORT MANIFEST (EXCEL/CSV) ---
+    function exportToCSV() {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        // Header Excel
+        csvContent += "Bus,No. Kursi,Nama Penumpang\n";
+
+        appState.buses.forEach(bus => {
+            const assignments = appState.assignments[bus.id] || {};
+            const specialSeats = ['Helper', 'Panitia', 'Driver'];
+            
+            // Loop kursi spesial
+            specialSeats.forEach(seat => {
+                if (assignments[seat]) {
+                    const pass = appState.passengers.find(p => p.id === assignments[seat]);
+                    if(pass) csvContent += `"${bus.name}","${seat}","${pass.name}"\n`;
+                }
+            });
+            
+            // Loop kursi reguler (1-50)
+            for(let i=1; i<=50; i++) {
+                if (assignments[i]) {
+                    const pass = appState.passengers.find(p => p.id === assignments[i]);
+                    if(pass) csvContent += `"${bus.name}","${i}","${pass.name}"\n`;
+                }
+            }
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Manifest_Penumpang_${appState.trip.title}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // --- FITUR BARU: GLOBAL SEARCH PENUMPANG ---
+    document.getElementById('global-search-input').addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        const resContainer = document.getElementById('search-results');
+        resContainer.innerHTML = '';
+        
+        if(!query) { resContainer.classList.add('hidden'); return; }
+        
+        const matches = appState.passengers.filter(p => p.name.toLowerCase().includes(query));
+        if(matches.length === 0) {
+            resContainer.innerHTML = '<div class="p-6 text-center text-slate-400 font-bold">🤷 Tidak ada penumpang dengan nama tersebut</div>';
+            resContainer.classList.remove('hidden');
+            return;
+        }
+
+        matches.forEach(p => {
+            let seatInfo = "Standby (Belum kebagian kursi)";
+            let locData = null;
+            
+            for(let busId in appState.assignments) {
+                for(let seatId in appState.assignments[busId]) {
+                    if(appState.assignments[busId][seatId] === p.id) {
+                        const busName = appState.buses.find(b => b.id === busId)?.name || busId;
+                        seatInfo = `${busName}, Kursi ${seatId}`;
+                        locData = { busId, seatId };
+                    }
+                }
+            }
+
+            const div = document.createElement('div');
+            div.className = "p-4 hover:bg-fuchsia-50 cursor-pointer transition-colors flex justify-between items-center";
+            div.innerHTML = `
+                <div class="font-bold text-indigo-900 text-lg">${p.name}</div>
+                <div class="text-sm px-3 py-1 rounded-full font-bold shadow-sm ${locData ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}">${seatInfo}</div>
+            `;
+            
+            div.onclick = () => {
+                resContainer.classList.add('hidden');
+                document.getElementById('global-search-input').value = '';
+                
+                if(locData) {
+                    appState.activeBusId = locData.busId;
+                    renderApp(); // Pindah ke tab bus yang sesuai
+                    
+                    // Gulir (scroll) ke kursi dan berikan efek highlight (kedip)
+                    setTimeout(() => {
+                        const seatEl = document.querySelector(`.seat[data-seat-id="${locData.seatId}"]`);
+                        if(seatEl) {
+                            seatEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+                            seatEl.classList.add('highlight-seat');
+                            setTimeout(() => seatEl.classList.remove('highlight-seat'), 2500);
+                        }
+                    }, 100);
+                } else if(appState.isAdminMode) {
+                    // Pindah ke tab bus agar admin bisa langsung menempatkan mereka
+                    switchTab('tab-bus');
+                    const unassignedList = document.getElementById('list-drop-zone');
+                    unassignedList.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }
+            };
+            resContainer.appendChild(div);
+        });
+        resContainer.classList.remove('hidden');
+    });
+
+    // Sembunyikan hasil pencarian jika mengklik sembarang tempat di luar kotak
+    document.addEventListener('click', (e) => {
+        if(!e.target.closest('#global-search-input') && !e.target.closest('#search-results')) {
+            document.getElementById('search-results').classList.add('hidden');
+        }
+    });
+
+    // --- INIT MOBILE DRAG & DROP POLYFILL ---
+    if (typeof MobileDragDrop !== 'undefined') {
+        MobileDragDrop.polyfill({
+            // Tahan jari 0.25 detik untuk mulai drag. (Mencegah salah drag saat mencoba scroll biasa di HP)
+            holdToDrag: 250, 
+            dragImageTranslateOverride: MobileDragDrop.scrollBehaviourDragImageTranslateOverride
+        });
+        // Wajib ditambahkan di iOS agar layar tidak ikut ketarik saat memindahkan kursi
+        window.addEventListener('touchmove', function() {}, {passive: false});
+    } else {
+        console.warn("MobileDragDrop polyfill gagal dimuat. Fitur drag & drop di HP mungkin tidak bekerja.");
+    }
+
+    window.onload = () => { generateBusHTML(); renderApp(); };
+</script>
+</body>
+</html>
