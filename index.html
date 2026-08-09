@@ -158,6 +158,12 @@
             70% { box-shadow: 0 0 0 20px rgba(192, 132, 252, 0); transform: scale(1); border-color: #c084fc; z-index: 20; }
             100% { box-shadow: 0 0 0 0 rgba(192, 132, 252, 0); }
         }
+        
+        /* Custom scrollbar untuk container bus mobile */
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 10px; margin: 0 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="antialiased">
@@ -344,7 +350,7 @@
                         </div>
                         
                         <div class="mt-5 pt-4 border-t-2 border-indigo-100 flex justify-between items-center">
-                             <span class="text-sm font-bold text-slate-500">Kapasitas: 53 Kursi/Bus</span>
+                             <span id="bus-capacity-info" class="text-sm font-bold text-slate-500">Kapasitas: 53 Kursi</span>
                              <button onclick="confirmResetSeats()" class="btn-bubbly bg-rose-100 text-rose-600 hover:bg-rose-200 px-4 py-2 text-xs font-bold border-2 border-rose-200">Reset Kursi Bus Ini</button>
                         </div>
                     </div>
@@ -373,39 +379,60 @@
 </main>
 
 <!-- THE SINGLE BUS DOM ELEMENT (Moved around by JS between Public/Admin) -->
-<div id="master-bus-layout" class="hide transition-all duration-300">
-    
-    <!-- Header khusus untuk Export Image (Sembunyi secara default) -->
-    <div id="export-header" class="text-center mb-8 hidden">
-        <h2 id="export-trip-name" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-purple-600 brand-font drop-shadow-sm mb-3">Nama Trip</h2>
-        <h3 id="export-bus-name" class="text-xl text-fuchsia-600 font-bold bg-white inline-block px-8 py-2.5 rounded-full shadow-sm border-2 border-fuchsia-100">Nama Bus</h3>
-    </div>
-
-    <div class="bus-outline shrink-0 relative" id="bus-visual-core">
-        <div class="mirror-left"></div>
-        <div class="mirror-right"></div>
-        <!-- Steering Wheel Graphic -->
-        <div class="absolute right-[45px] top-[15px] w-14 h-14 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none"></div>
-
-        <!-- Front Row (Crew) -->
-        <div class="flex justify-between items-end mb-10 px-2 gap-2">
-            <div class="seat special-seat" data-seat-id="Helper" ondrop="dropOnSeat(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondragenter="dragEnter(event)">
-                <span class="seat-number">Helper</span>
-            </div>
-            <div class="seat special-seat panitia-seat" data-seat-id="Panitia" ondrop="dropOnSeat(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondragenter="dragEnter(event)">
-                <span class="seat-number">Panitia</span>
-            </div>
-            <div class="seat special-seat" data-seat-id="Driver" ondrop="dropOnSeat(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondragenter="dragEnter(event)">
-                <span class="seat-number">Driver</span>
-            </div>
+<div id="master-bus-layout" class="hide transition-all duration-300 w-full overflow-x-auto custom-scrollbar pb-6">
+    <div id="export-wrapper" class="w-fit min-w-full flex flex-col items-center justify-start lg:justify-center px-2">
+        
+        <!-- Header khusus untuk Export Image (Sembunyi secara default) -->
+        <div id="export-header" class="text-center mb-8 hidden w-full">
+            <h2 id="export-trip-name" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-purple-600 brand-font drop-shadow-sm mb-3">Nama Trip</h2>
+            <h3 id="export-bus-name" class="text-xl text-fuchsia-600 font-bold bg-white inline-block px-8 py-2.5 rounded-full shadow-sm border-2 border-fuchsia-100">Nama Bus</h3>
         </div>
 
-        <div id="main-seats-container" class="flex flex-col gap-4"></div>
-        <div class="back-row" id="back-row-container"></div>
+        <div class="bus-outline shrink-0 relative transition-all duration-500 mx-auto" id="bus-visual-core" style="min-width: 580px; max-width: 580px;">
+            <div class="mirror-left"></div>
+            <div class="mirror-right"></div>
+            <!-- Steering Wheel Graphic -->
+            <div id="steering-wheel" class="absolute right-[45px] top-[15px] w-14 h-14 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none"></div>
+
+            <!-- Front Row (Crew) -->
+            <div id="front-row-container" class="flex justify-between items-end mb-10 px-2 gap-2">
+                <!-- Kursi depan di-generate otomatis oleh JavaScript berdasarkan tipe bus -->
+            </div>
+
+            <div id="main-seats-container" class="flex flex-col gap-4"></div>
+            <div class="back-row" id="back-row-container"></div>
+        </div>
     </div>
 </div>
 
 <!-- Modals -->
+<!-- Fleet Modal -->
+<div id="fleet-modal" class="fixed inset-0 bg-indigo-900/60 backdrop-blur-sm z-[100] flex items-center justify-center hide opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm transform scale-95 transition-transform duration-300 border-4 border-indigo-100">
+        <h3 class="text-2xl font-bold text-indigo-900 mb-2 flex items-center gap-2 brand-font">🚌 Tambah Armada</h3>
+        <p class="text-sm text-slate-500 mb-4 font-medium">Pilih jenis armada dan beri nama.</p>
+        <div class="space-y-4 mb-6">
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">Jenis Armada</label>
+                <select id="new-bus-type" class="w-full border-2 border-indigo-100 rounded-2xl px-4 py-3 focus:border-indigo-400 outline-none font-bold text-slate-700 bg-white">
+                    <option value="big-bus-50">Big Bus (50 Kursi)</option>
+                    <option value="medium-bus-30">Medium Bus (39 Kursi)</option>
+                    <option value="elf-long-19">Elf Long (20 Kursi)</option>
+                    <option value="hiace-15">Hi-Ace (14 Kursi)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">Nama / Nomor</label>
+                <input type="text" id="new-bus-name" placeholder="Misal: Bus 2, Elf A..." class="w-full border-2 border-indigo-100 rounded-2xl px-4 py-3 focus:border-indigo-400 outline-none font-bold text-slate-700">
+            </div>
+        </div>
+        <div class="flex justify-end gap-3">
+            <button onclick="closeModal('fleet-modal')" class="btn-bubbly px-5 py-2.5 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200">Batal</button>
+            <button onclick="confirmAddBus()" class="btn-bubbly px-5 py-2.5 text-sm bg-indigo-600 text-white hover:bg-indigo-700">Tambah</button>
+        </div>
+    </div>
+</div>
+
 <!-- Login Modal -->
 <div id="login-modal" class="fixed inset-0 bg-indigo-900/60 backdrop-blur-sm z-[100] flex items-center justify-center hide opacity-0 transition-opacity duration-300">
     <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm transform scale-95 transition-transform duration-300 border-4 border-indigo-100">
@@ -559,33 +586,8 @@
         if (window.triggerFirebaseSave && !isSyncing) window.triggerFirebaseSave(dataToSave);
     }
 
-    function generateBusHTML() {
-        const main = document.getElementById('main-seats-container');
-        const back = document.getElementById('back-row-container');
-        main.innerHTML = ''; back.innerHTML = '';
-        let currentSeatNum = 1;
-        
-        for (let row = 0; row < 11; row++) {
-            const rowDiv = document.createElement('div'); rowDiv.className = 'flex justify-between items-center px-1';
-            
-            const leftPair = document.createElement('div'); leftPair.className = 'flex gap-3';
-            leftPair.appendChild(createSeatDOM(currentSeatNum++));
-            leftPair.appendChild(createSeatDOM(currentSeatNum++));
-            
-            const aisle = document.createElement('div'); aisle.className = 'aisle';
-            aisle.innerHTML = `<div class="h-full w-3 bg-slate-100 rounded-full mx-auto opacity-50 shadow-inner"></div>`;
-            
-            const rightPair = document.createElement('div'); rightPair.className = 'flex gap-3';
-            rightPair.appendChild(createSeatDOM(currentSeatNum++));
-            rightPair.appendChild(createSeatDOM(currentSeatNum++));
-            
-            rowDiv.appendChild(leftPair); rowDiv.appendChild(aisle); rowDiv.appendChild(rightPair);
-            main.appendChild(rowDiv);
-        }
-
-        for (let i = 0; i < 6; i++) back.appendChild(createSeatDOM(currentSeatNum++));
-    }
-
+    // Fungsi generateBusHTML telah digantikan oleh renderBusLayout yang dipanggil di dalam renderApp
+    
     function createSeatDOM(seatId) {
         const seat = document.createElement('div'); seat.className = 'seat'; seat.dataset.seatId = seatId;
         seat.setAttribute('ondrop', 'dropOnSeat(event)'); seat.setAttribute('ondragover', 'allowDrop(event)');
@@ -595,6 +597,14 @@
     }
 
     function renderApp() {
+        // Cek migrasi data armada lama agar tidak error
+        appState.buses.forEach(b => { 
+            if(!b.type) b.type = 'big-bus-50'; 
+            if(b.type === 'medium-bus-30') b.type = 'medium-bus-39';
+            if(b.type === 'hiace-15') b.type = 'hiace-14';
+            if(b.type === 'elf-long-19') b.type = 'elf-long-20';
+        });
+
         document.getElementById('pub-trip-title').innerText = appState.trip.title;
         document.getElementById('pub-trip-date').innerText = appState.trip.date;
         document.getElementById('pub-trip-desc').innerText = appState.trip.desc;
@@ -638,9 +648,164 @@
             renderPublicBusTabs();
         }
 
+        renderBusLayout();
         renderSeats(); saveState();
     }
     
+    function renderBusLayout() {
+        const activeBus = appState.buses.find(b => b.id === appState.activeBusId);
+        const type = activeBus?.type || 'big-bus-50';
+        
+        const main = document.getElementById('main-seats-container');
+        const back = document.getElementById('back-row-container');
+        const frontContainer = document.getElementById('front-row-container');
+        const core = document.getElementById('bus-visual-core');
+        const steeringWheel = document.getElementById('steering-wheel');
+        
+        main.innerHTML = ''; back.innerHTML = ''; frontContainer.innerHTML = '';
+        let seatNum = 1;
+        
+        // Sembunyikan setir default karena akan diatur dinamis
+        if (steeringWheel) steeringWheel.style.display = 'none';
+
+        // Helper untuk mempermudah pembuatan kursi khusus di baris depan
+        function createSpecialSeat(id, label, widthClass = 'w-[85px]', extraClass = '') {
+            const div = document.createElement('div');
+            div.className = `seat special-seat ${widthClass} ${extraClass}`;
+            div.dataset.seatId = id;
+            div.setAttribute('ondrop', 'dropOnSeat(event)'); div.setAttribute('ondragover', 'allowDrop(event)');
+            div.setAttribute('ondragleave', 'dragLeave(event)'); div.setAttribute('ondragenter', 'dragEnter(event)');
+            div.innerHTML = `<span class="seat-number">${label}</span>`;
+            return div;
+        }
+        
+        if (type === 'big-bus-50') {
+            core.style.minWidth = '580px'; core.style.maxWidth = '580px';
+            frontContainer.className = 'flex justify-between items-end mb-10 px-2 gap-2';
+            frontContainer.appendChild(createSpecialSeat('Helper', 'Helper'));
+            frontContainer.appendChild(createSpecialSeat('Panitia', 'Panitia', 'w-[120px]', 'panitia-seat'));
+            frontContainer.appendChild(createSpecialSeat('Driver', 'Driver'));
+            if (steeringWheel) { steeringWheel.style.display = 'block'; steeringWheel.className = 'absolute right-[45px] top-[15px] w-14 h-14 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none'; }
+
+            for (let r=0; r<11; r++) { main.appendChild(createRow22(seatNum)); seatNum+=4; }
+            back.style.gridTemplateColumns = 'repeat(6, 1fr)'; back.className = 'back-row';
+            for (let i=0; i<6; i++) back.appendChild(createSeatDOM(seatNum++));
+            
+        } else if (type === 'medium-bus-39') {
+            // Sesuai gambar: 39 Kursi. Depan: Kernet, CD, Sopir
+            core.style.minWidth = '580px'; core.style.maxWidth = '580px';
+            frontContainer.className = 'flex justify-between items-end mb-10 px-2 gap-2';
+            frontContainer.appendChild(createSpecialSeat('Kernet', 'Kernet'));
+            frontContainer.appendChild(createSpecialSeat('CD', 'CD', 'w-[100px]'));
+            frontContainer.appendChild(createSpecialSeat('Sopir', 'Sopir'));
+            if (steeringWheel) { steeringWheel.style.display = 'block'; steeringWheel.className = 'absolute right-[45px] top-[15px] w-14 h-14 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none'; }
+
+            // Baris 1-8 (2-2)
+            for (let r=0; r<8; r++) { main.appendChild(createRow22(seatNum)); seatNum+=4; }
+            
+            // Baris 9: Kosong (Pintu Belakang), 2 Kursi di Kanan (33,34)
+            const row9 = document.createElement('div'); row9.className = 'flex justify-end items-center px-1 mb-1';
+            const rightPair = document.createElement('div'); rightPair.className = 'flex gap-3';
+            rightPair.appendChild(createSeatDOM(seatNum++)); rightPair.appendChild(createSeatDOM(seatNum++));
+            row9.appendChild(rightPair); main.appendChild(row9);
+            
+            // Baris 10: 5 Kursi Belakang
+            back.style.gridTemplateColumns = 'repeat(5, 1fr)'; back.className = 'back-row';
+            for (let i=0; i<5; i++) back.appendChild(createSeatDOM(seatNum++)); 
+            
+        } else if (type === 'hiace-14') {
+            // Sesuai gambar: 14 Seat Premio. Penomoran Zig-zag
+            core.style.minWidth = '440px'; core.style.maxWidth = '440px'; 
+            frontContainer.className = 'flex justify-between items-end mb-6 px-4 gap-2';
+            frontContainer.appendChild(createSeatDOM(1));
+            frontContainer.appendChild(createSpecialSeat('Driver', 'Driver'));
+            if (steeringWheel) { steeringWheel.style.display = 'block'; steeringWheel.className = 'absolute right-[35px] top-[15px] w-12 h-12 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none'; }
+            
+            const addRow = (arr) => {
+                const r = document.createElement('div'); r.className = 'flex justify-between items-center px-4 mb-2 gap-3 w-full';
+                arr.forEach(item => {
+                    if (item === 'gap') { const g = document.createElement('div'); g.className = 'w-[85px]'; r.appendChild(g); }
+                    else if (item === 'door') { const d = document.createElement('div'); d.className = 'w-[85px] border-b-4 border-slate-300 flex items-end justify-center pb-1 text-xs font-bold text-slate-400 tracking-wider'; d.innerText = 'PINTU'; r.appendChild(d); }
+                    else r.appendChild(createSeatDOM(item));
+                });
+                main.appendChild(r);
+            };
+            
+            addRow([2, 3, 4]);
+            addRow(['door', 6, 7]);
+            addRow([5, 9, 10]);
+            addRow([8, 'gap', 'gap']);
+            
+            back.style.gridTemplateColumns = 'repeat(4, 1fr)'; back.className = 'back-row px-4';
+            [11, 12, 13, 14].forEach(id => back.appendChild(createSeatDOM(id)));
+            
+        } else if (type === 'elf-long-20') {
+            // Sesuai gambar: 20 Seat. Depan ada 4 (2 Kiri, 1 Tengah, 1 Driver Kanan)
+            core.style.minWidth = '490px'; core.style.maxWidth = '490px';
+            frontContainer.className = 'flex justify-between items-end mb-6 px-3 gap-2';
+            
+            const leftFront = document.createElement('div'); leftFront.className = 'flex gap-2';
+            leftFront.appendChild(createSeatDOM(2)); leftFront.appendChild(createSeatDOM(3));
+            
+            const rightFront = document.createElement('div'); rightFront.className = 'flex gap-2';
+            rightFront.appendChild(createSeatDOM(1)); rightFront.appendChild(createSpecialSeat('Driver', 'Driver'));
+            
+            frontContainer.appendChild(leftFront); frontContainer.appendChild(rightFront);
+            if (steeringWheel) { steeringWheel.style.display = 'block'; steeringWheel.className = 'absolute right-[25px] top-[15px] w-12 h-12 border-4 border-slate-700 rounded-full opacity-20 border-b-transparent transform rotate-45 pointer-events-none'; }
+
+            const addElfRow = (leftSeats, rightItem) => {
+                const r = document.createElement('div'); r.className = 'flex justify-between items-center px-3 mb-2 gap-2 w-full';
+                const leftDiv = document.createElement('div'); leftDiv.className = 'flex gap-2';
+                leftSeats.forEach(id => leftDiv.appendChild(createSeatDOM(id)));
+                r.appendChild(leftDiv);
+                
+                if (rightItem === 'gap') { const g = document.createElement('div'); g.className = 'w-[85px]'; r.appendChild(g); } 
+                else if (rightItem === 'door') { const d = document.createElement('div'); d.className = 'w-[85px] border-b-4 border-slate-300 flex items-end justify-center pb-1 text-xs font-bold text-slate-400 tracking-wider'; d.innerText = 'PINTU'; r.appendChild(d); } 
+                else { r.appendChild(createSeatDOM(rightItem)); }
+                main.appendChild(r);
+            };
+            
+            addElfRow([4, 5, 6], 'door');
+            addElfRow([7, 8, 9], 10);
+            addElfRow([11, 12, 13], 'gap');
+            addElfRow([14, 15, 16], 'gap');
+            
+            back.style.gridTemplateColumns = 'repeat(4, 1fr)'; back.className = 'back-row px-3';
+            [17, 18, 19, 20].forEach(id => back.appendChild(createSeatDOM(id)));
+        }
+        
+        const typeInfo = {
+            'big-bus-50': '53 Kursi (50 + Depan)',
+            'medium-bus-39': '42 Kursi (39 + Depan)',
+            'hiace-14': '15 Kursi (14 + Driver)',
+            'elf-long-20': '21 Kursi (20 + Driver)'
+        };
+        const capInfoEl = document.getElementById('bus-capacity-info');
+        if(capInfoEl) capInfoEl.innerText = `Kapasitas: ${typeInfo[type]}`;
+    }
+
+    function createRow22(startNum) {
+        const rowDiv = document.createElement('div'); rowDiv.className = 'flex justify-between items-center px-1 mb-1';
+        const left = document.createElement('div'); left.className = 'flex gap-3';
+        left.appendChild(createSeatDOM(startNum)); left.appendChild(createSeatDOM(startNum+1));
+        const aisle = document.createElement('div'); aisle.className = 'aisle'; aisle.innerHTML = `<div class="h-full w-3 bg-slate-100 rounded-full mx-auto opacity-50 shadow-inner"></div>`;
+        const right = document.createElement('div'); right.className = 'flex gap-3';
+        right.appendChild(createSeatDOM(startNum+2)); right.appendChild(createSeatDOM(startNum+3));
+        rowDiv.appendChild(left); rowDiv.appendChild(aisle); rowDiv.appendChild(right);
+        return rowDiv;
+    }
+
+    function createRow12(startNum) {
+        const rowDiv = document.createElement('div'); rowDiv.className = 'flex justify-between items-center px-2 mb-1';
+        const left = document.createElement('div'); left.className = 'flex gap-3';
+        left.appendChild(createSeatDOM(startNum));
+        const aisle = document.createElement('div'); aisle.className = 'aisle w-[100px] flex justify-center'; aisle.innerHTML = `<div class="h-full w-2 bg-slate-100 rounded-full opacity-50 shadow-inner"></div>`;
+        const right = document.createElement('div'); right.className = 'flex gap-3';
+        right.appendChild(createSeatDOM(startNum+1)); right.appendChild(createSeatDOM(startNum+2));
+        rowDiv.appendChild(left); rowDiv.appendChild(aisle); rowDiv.appendChild(right);
+        return rowDiv;
+    }
+
     function renderPublicBusTabs() {
         const container = document.getElementById('pub-bus-tabs');
         container.innerHTML = '';
@@ -913,11 +1078,20 @@
     }
 
     function addNewBus() {
-        const num = appState.buses.length + 1;
+        document.getElementById('new-bus-name').value = '';
+        openModal('fleet-modal');
+    }
+
+    function confirmAddBus() {
+        const name = document.getElementById('new-bus-name').value.trim() || `Armada ${appState.buses.length + 1}`;
+        const type = document.getElementById('new-bus-type').value;
         const newBusId = generateId();
-        appState.buses.push({ id: newBusId, name: `Bus ${num}` });
+        
+        appState.buses.push({ id: newBusId, name: name, type: type });
         appState.assignments[newBusId] = {};
         appState.activeBusId = newBusId;
+        
+        closeModal('fleet-modal');
         renderApp();
     }
 
@@ -971,7 +1145,7 @@
     document.getElementById('dialog-confirm-btn').addEventListener('click', () => { if(dialogCallback) dialogCallback(); closeModal('dialog-modal'); });
 
     function exportToImage() {
-        const exportContainer = document.getElementById('master-bus-layout');
+        const exportContainer = document.getElementById('export-wrapper');
         const exportHeader = document.getElementById('export-header');
         const exportBtn = document.getElementById('export-btn');
         
@@ -1020,11 +1194,11 @@
     function exportToCSV() {
         let csvContent = "data:text/csv;charset=utf-8,";
         // Header Excel
-        csvContent += "Bus,No. Kursi,Nama Penumpang\n";
+        csvContent += "Armada,No. Kursi,Nama Penumpang\n";
 
         appState.buses.forEach(bus => {
             const assignments = appState.assignments[bus.id] || {};
-            const specialSeats = ['Helper', 'Panitia', 'Driver'];
+            const specialSeats = ['Helper', 'Panitia', 'Driver', 'Kernet', 'CD', 'Sopir'];
             
             // Loop kursi spesial
             specialSeats.forEach(seat => {
@@ -1034,8 +1208,8 @@
                 }
             });
             
-            // Loop kursi reguler (1-50)
-            for(let i=1; i<=50; i++) {
+            // Loop semua kursi reguler armada (Maks 60)
+            for(let i=1; i<=60; i++) {
                 if (assignments[i]) {
                     const pass = appState.passengers.find(p => p.id === assignments[i]);
                     if(pass) csvContent += `"${bus.name}","${i}","${pass.name}"\n`;
@@ -1133,11 +1307,9 @@
         });
         // Wajib ditambahkan di iOS agar layar tidak ikut ketarik saat memindahkan kursi
         window.addEventListener('touchmove', function() {}, {passive: false});
-    } else {
-        console.warn("MobileDragDrop polyfill gagal dimuat. Fitur drag & drop di HP mungkin tidak bekerja.");
     }
 
-    window.onload = () => { generateBusHTML(); renderApp(); };
+    window.onload = () => { renderApp(); };
 </script>
 </body>
 </html>
